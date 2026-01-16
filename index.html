@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GUTS填表小工具 V</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; }
+        .bookmark-btn { cursor: grab; user-select: none; }
+        .bookmark-btn:active { cursor: grabbing; }
+        
+        #pasteArea {
+            min-height: 250px;
+            max-height: 500px;
+            overflow-y: auto;
+            white-space: normal;
+            font-family: 'Segoe UI', sans-serif;
+            background: #fff;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 flex flex-col">
+
+    <!-- Header -->
+    <div class="bg-slate-900 text-white py-6 px-6 shadow-md relative">
+        <div class="max-w-6xl mx-auto flex justify-between items-center relative z-10">
+            <div>
+                <h1 class="text-2xl font-bold tracking-wider flex items-center gap-3">
+                    <i class="fas fa-paragraph text-emerald-400"></i> GUTS填表小工具
+                    <span class="text-xs bg-emerald-600 text-white px-2 py-1 rounded ml-2 border border-emerald-500">V 顏色修正</span>
+                </h1>
+                <p class="text-slate-400 text-sm mt-1">請務必做好備份習慣喔</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-6xl mx-auto px-6 py-8 w-full flex-1">
+        
+        <div class="grid md:grid-cols-2 gap-8">
+            <!-- Step 1: Input -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col h-full">
+                <div class="flex items-center gap-3 mb-4 border-b pb-4">
+                    <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">1</div>
+                    <h2 class="text-xl font-bold text-slate-700">初始化資料</h2>
+                </div>
+
+                <div class="space-y-4 flex-1 flex flex-col">
+                    <div class="text-sm text-slate-600 bg-slate-50 p-3 rounded border border-slate-100">
+                        <i class="fas fa-check mr-1 text-emerald-600"></i> 
+                        <strong>更新：</strong><br>
+                        修復了「編輯內容」時，無法更改文字顏色與背景底色的問題。
+                    </div>
+
+                    <!-- ContentEditable Div -->
+                    <div id="pasteArea" contenteditable="true" 
+                         class="w-full p-4 border-2 border-dashed border-slate-300 rounded-lg focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 outline-none transition-all text-sm flex-1"
+                         data-placeholder="請在此貼上內容..."></div>
+                    
+                    <div class="flex justify-between items-center pt-2">
+                        <span id="statusMsg" class="text-xs text-slate-400 font-mono">等待輸入...</span>
+                        <button onclick="generateBookmarklet()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow hover:shadow-lg flex items-center gap-2">
+                            <i class="fas fa-bolt"></i> 產生插件
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Result -->
+            <div id="resultArea" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 opacity-50 pointer-events-none transition-all duration-300 flex flex-col h-full">
+                <div class="flex items-center gap-3 mb-4 border-b pb-4">
+                    <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">2</div>
+                    <h2 class="text-xl font-bold text-slate-700">安裝插件</h2>
+                </div>
+
+                <div class="flex flex-col items-center justify-center flex-1 py-6">
+                    <div class="relative group cursor-grab active:cursor-grabbing transform hover:scale-105 transition-transform duration-300">
+                        <div class="absolute -inset-1 bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full blur opacity-30 group-hover:opacity-70 transition duration-500"></div>
+                        <a id="bookmarkletBtn" href="#" onclick="alert('請拖曳此按鈕到書籤列，而不是直接點擊！'); return false;" 
+                           class="bookmark-btn relative flex items-center gap-4 bg-slate-900 text-white px-10 py-6 rounded-full font-bold text-xl shadow-2xl border border-slate-700">
+                            <span class="bg-yellow-400 text-slate-900 w-8 h-8 rounded-full flex items-center justify-center text-sm">G</span>
+                            <span>GUTS填表小工具</span>
+                        </a>
+                    </div>
+                    
+                    <div class="mt-8 text-center space-y-2">
+                        <p class="text-sm text-slate-600 font-medium">拖曳上方按鈕至書籤列 (覆蓋舊版)</p>
+                        <p class="text-xs text-slate-400">已解決顏色編輯無效問題</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script -->
+    <script>
+        function parsePasteData() {
+            const pasteArea = document.getElementById('pasteArea');
+            if (!pasteArea.innerText.trim()) return [];
+
+            const table = pasteArea.querySelector('table');
+            const data = [];
+
+            // Helper: Color Extraction
+            const getBgColor = (el) => {
+                if (!el) return '#ffffff';
+                if (el.style && el.style.backgroundColor) return el.style.backgroundColor;
+                if (el.getAttribute('bgcolor')) return el.getAttribute('bgcolor');
+                return '#ffffff';
+            };
+            const rgbToHex = (rgb) => {
+                if (!rgb || rgb === 'transparent' || rgb.includes('rgba(0, 0, 0, 0)')) return '#ffffff';
+                if (rgb.startsWith('#')) return rgb;
+                try {
+                    const sep = rgb.indexOf(",") > -1 ? "," : " ";
+                    const parts = rgb.substr(4).split(")")[0].split(sep);
+                    let r = (+parts[0]).toString(16), g = (+parts[1]).toString(16), b = (+parts[2]).toString(16);
+                    if (r.length == 1) r = "0" + r; if (g.length == 1) g = "0" + g; if (b.length == 1) b = "0" + b;
+                    return "#" + r + g + b;
+                } catch(e) { return '#ffffff'; }
+            };
+
+            // Helper: Content Cleaning
+            const cleanHtmlContent = (html) => {
+                if (!html) return '';
+                let clean = html.replace(/<meta[^>]*>/g, '');
+                return clean.trim();
+            };
+
+            // Helper: Header Detection
+            const isHeader = (t, c) => {
+                const T = t.toLowerCase().trim();
+                const C = c.toLowerCase().trim();
+                const headerKeywords = [
+                    'title', 'content', 'type', 'response', 
+                    '標題', '內容', '類型', '回應', 
+                    '標題 (title)', '內容 (content)', 'color', 'pinned'
+                ];
+                const isMatch = (val) => headerKeywords.some(k => val === k || val.startsWith(k));
+                if (isMatch(T) || isMatch(C)) return true;
+                return false;
+            };
+
+            // Helper: Whitespace Normalization
+            const normalizeText = (text) => {
+                if(!text) return '';
+                return text.replace(/\t/g, ' '); 
+            };
+
+            if (table) {
+                const rows = table.querySelectorAll('tr');
+                rows.forEach((row, index) => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 2) {
+                        const title = cells[0].innerText.trim();
+                        let plain = cells[1].innerText.trim();
+                        plain = normalizeText(plain); 
+                        
+                        if (index === 0 && isHeader(title, plain)) return; 
+
+                        let html = cells[1].innerHTML; 
+                        html = cleanHtmlContent(html); 
+
+                        let bg = getBgColor(row);
+                        if (bg === '#ffffff' || !bg) bg = getBgColor(cells[0]);
+                        
+                        data.push({ title, content: plain, html, color: rgbToHex(bg), pinned: false });
+                    }
+                });
+            } else {
+                const lines = pasteArea.innerText.trim().split('\n');
+                lines.forEach((line, index) => {
+                    let parts = line.split('\t');
+                    if(parts.length < 2 && line.includes(',')) parts = line.split(','); 
+                    if (parts.length >= 2) {
+                        const title = parts[0].trim();
+                        let content = parts[1].trim();
+                        content = normalizeText(content); 
+
+                        if (index === 0 && isHeader(title, content)) return;
+                        data.push({ title, content, html: content, color: '#ffffff', pinned: false });
+                    }
+                });
+            }
+            return data;
+        }
+
+        function generateBookmarklet() {
+            const statusMsg = document.getElementById('statusMsg');
+            const resultArea = document.getElementById('resultArea');
+            const parsedData = parsePasteData();
+            
+            if (parsedData.length === 0) statusMsg.innerHTML = '<span class="text-slate-500">建立空白工具</span>';
+            else statusMsg.innerHTML = `<span class="text-emerald-600 font-bold"><i class="fas fa-check"></i> 已封裝 ${parsedData.length} 筆資料</span>`;
+            
+            resultArea.classList.remove('opacity-50', 'pointer-events-none');
+            const jsonData = JSON.stringify(parsedData);
+
+            // --- BOOKMARKLET CODE ---
+            const code = `
+(function() {
+    try {
+        const STORAGE_KEY = 'GUTS_PRO_V4_DATA';
+        const PREF_KEY = 'GUTS_PRO_V4_PREFS';
+        const INITIAL_DATA = ${jsonData};
+        
+        let appData = [];
+        const currentFingerprint = JSON.stringify(INITIAL_DATA);
+        const storedFingerprint = localStorage.getItem(STORAGE_KEY + '_FINGERPRINT');
+        const storedData = localStorage.getItem(STORAGE_KEY);
+
+        if (INITIAL_DATA.length > 0 && currentFingerprint !== storedFingerprint) {
+            appData = INITIAL_DATA;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+            localStorage.setItem(STORAGE_KEY + '_FINGERPRINT', currentFingerprint);
+            setTimeout(() => {
+                const t = document.createElement('div');
+                t.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#10b981;color:white;padding:10px 20px;border-radius:20px;z-index:999999;font-weight:bold;font-family:sans-serif;box-shadow:0 5px 15px rgba(0,0,0,0.3);';
+                t.innerText = '已匯入新資料！';
+                document.body.appendChild(t);
+                setTimeout(() => t.remove(), 2500);
+            }, 500);
+        } else {
+            try { appData = storedData ? JSON.parse(storedData) : INITIAL_DATA; } catch(e) { appData = INITIAL_DATA; }
+        }
+
+        let prefs = { width: 500, iconTop: 50, iconLeft: null, isExpanded: true };
+        try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem(PREF_KEY)) }; } catch(e) {}
+
+        const ROOT_ID = 'guts-pro-v4-root';
+        if(document.getElementById(ROOT_ID)) return; 
+
+        /* SVGs */
+        const ICONS = {
+            bolt: '<svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
+            plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 5v14M5 12h14"/></svg>',
+            export: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>',
+            minus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M5 12h14"/></svg>',
+            close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+            paste: '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4h-4.18C12 9.4 12 9.6 12 10c0 .55.45 1 1 1h4v-2z"/></svg>',
+            edit: '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>',
+            trash: '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
+            grip: '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>',
+            pin: '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/></svg>',
+            max: '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>',
+            min: '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>'
+        };
+
+        const styleId = 'guts-pro-v4-style';
+        if (!document.getElementById(styleId)) {
+            const s = document.createElement('style'); s.id = styleId;
+            s.innerHTML = \`
+                #guts-pro-v4-root { font-family: 'Segoe UI', 'Roboto', sans-serif; font-size: 14px; line-height: 1.5; color: #333; z-index: 2147483647; position: fixed; }
+                
+                /* CSS RESET FOR PREVIEW (V6.1) */
+                .gp-preview p, .gp-preview div, .gp-preview h1, .gp-preview h2 {
+                    margin: 0 !important; padding: 0 !important; line-height: 1.5 !important;
+                }
+                .gp-preview br { display: block; content: ""; margin: 0; }
+
+                #guts-icon { position: fixed; top: \${prefs.iconTop}px; \${prefs.iconLeft !== null ? 'left:' + prefs.iconLeft + 'px;' : 'right: 20px;'} width: 50px; height: 50px; background: #0f172a; color: white; border-radius: 50%; cursor: move; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.4); transition: transform 0.1s; z-index: 2147483647; border: 2px solid #fff; }
+                #guts-icon:hover { transform: scale(1.1); }
+                #guts-panel { position: fixed; top: 0; right: 0; bottom: 0; width: \${prefs.width}px; background: #f8fafc; box-shadow: -5px 0 30px rgba(0,0,0,0.15); display: none; flex-direction: column; border-left: 1px solid #e2e8f0; }
+                .gp-header { padding: 15px 20px; background: #0f172a; color: white; display: flex; flex-direction: column; gap: 12px; }
+                .gp-title { font-weight: bold; font-size: 18px; display:flex; gap:8px; align-items:center; }
+                .gp-controls { display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; }
+                .gp-btn-action { background: rgba(255,255,255,0.08); color: #cbd5e1; padding: 8px 4px; border-radius: 6px; cursor: pointer; text-align: center; font-size: 12px; display: flex; flex-direction: column; align-items: center; gap: 5px; transition: 0.2s; border: 1px solid transparent; }
+                .gp-btn-action:hover { background: rgba(255,255,255,0.15); color: #fff; }
+                .gp-body { flex: 1; overflow-y: auto; padding: 15px; }
+                
+                .gp-item { background: white; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 12px; overflow: hidden; display: flex; align-items: stretch; transition: all 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+                .gp-item:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); border-color: #cbd5e1; }
+                .gp-item-left { width: 80px; background: #f1f5f9; border-right: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 10px; }
+                .gp-fill-btn { width: 100%; height: 100%; min-height: 40px; background: linear-gradient(135deg, #10b981, #059669); color: white; border-radius: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(16, 185, 129, 0.3); transition: 0.2s; }
+                .gp-fill-btn:hover { transform: scale(1.05); } .gp-fill-btn:active { transform: scale(0.95); }
+                .gp-fill-text { font-size: 11px; font-weight: bold; margin-top:2px; }
+                .gp-item-mid { flex: 1; padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; cursor: default; }
+                .gp-item-title { font-weight: 600; font-size: 15px; color: #334155; line-height: 1.4; display: flex; align-items: center; gap: 5px; }
+                .gp-item-right { display: flex; align-items: center; gap: 6px; padding-right: 12px; background: transparent; }
+                .gp-icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: #94a3b8; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+                .gp-icon-btn.edit:hover { background: #eff6ff; color: #3b82f6; } .gp-icon-btn.delete:hover { background: #fef2f2; color: #ef4444; }
+                .gp-drag-handle { width: 20px; height: 100%; display: flex; align-items: center; justify-content: center; cursor: grab; color: #cbd5e1; margin-left: 4px; }
+                
+                .gp-preview { 
+                    position: fixed; display: none; background: #ffffff; border: 1px solid #cbd5e1; 
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.25); padding: 20px; border-radius: 8px; 
+                    z-index: 2147483647; 
+                    width: max-content; max-width: 80vw; max-height: 80vh; overflow-y: auto; 
+                    pointer-events: none;
+                    white-space: pre-wrap; word-break: break-word; line-height: 1.5;
+                }
+                
+                #gp-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px; height: 500px; background: #fff; z-index: 2147483648; display: none; flex-direction: column; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border-radius: 12px; border: 1px solid #cbd5e1; }
+                #gp-modal.expanded { width: 95vw; height: 95vh; }
+                .gp-modal-head { padding: 15px; border-bottom: 1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc; border-radius: 12px 12px 0 0; }
+                .gp-modal-body { flex:1; padding: 15px; display:flex; flex-direction:column; gap: 15px; overflow-y:auto; }
+                .gp-input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 15px; }
+                .gp-toolbar { display: flex; gap: 5px; flex-wrap: wrap; background: #f1f5f9; padding: 5px; border-radius: 6px 6px 0 0; border: 1px solid #cbd5e1; border-bottom: none; align-items: center; }
+                .gp-tool-btn { padding: 4px 8px; cursor: pointer; border: 1px solid transparent; background: transparent; font-weight: bold; font-size: 14px; border-radius: 4px; display: flex; align-items: center; gap: 4px; }
+                .gp-tool-btn:hover { background: #e2e8f0; }
+                .gp-color-picker { width: 24px; height: 24px; padding: 0; border: none; background: transparent; cursor: pointer; }
+                .gp-rich-editor { width: 100%; flex: 1; border: 1px solid #cbd5e1; border-radius: 0 0 6px 6px; padding: 15px; font-size: 14px; overflow-y: auto; outline: none; background: white; line-height: 1.6; }
+                .gp-modal-foot { padding: 15px; border-top: 1px solid #e2e8f0; display:flex; justify-content: flex-end; gap: 10px; background:#f8fafc; border-radius: 0 0 12px 12px; }
+                .gp-btn { padding: 8px 20px; border-radius: 6px; cursor: pointer; border:none; font-weight:bold; }
+                .gp-btn-primary { background: #0f172a; color: white; }
+                .gp-btn-default { background: #e2e8f0; color: #334155; }
+                .gp-resizer { position: absolute; top:0; bottom:0; left:0; width:5px; cursor: col-resize; z-index: 10; }
+                .gp-toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.85); color: white; padding: 15px 25px; border-radius: 30px; opacity: 0; transition: 0.2s; pointer-events:none; font-weight:bold; z-index: 2147483647; text-align: center;}
+                .gp-toast.show { opacity: 1; }
+                .gp-bg-picker { width: 40px; height: 25px; border:none; padding:0; background:transparent; cursor:pointer; }
+                #gp-context-menu { position: fixed; background: white; border: 1px solid #cbd5e1; box-shadow: 0 5px 15px rgba(0,0,0,0.2); border-radius: 6px; display: none; z-index: 2147483649; font-size: 13px; }
+                .gp-menu-item { padding: 10px 20px; cursor: pointer; color: #334155; display: flex; align-items: center; gap: 8px; }
+                .gp-menu-item:hover { background: #f1f5f9; }
+                .gp-menu-item.danger { color: #ef4444; border-top: 1px solid #e2e8f0; }
+                #gp-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); z-index: 2147483647; display: none; backdrop-filter: blur(2px); }
+            \`;
+            document.head.appendChild(s);
+        }
+
+        const root = document.createElement('div'); root.id = ROOT_ID;
+        const icon = document.createElement('div'); icon.id = 'guts-icon'; icon.innerHTML = ICONS.bolt;
+        const panel = document.createElement('div'); panel.id = 'guts-panel';
+        const overlay = document.createElement('div'); overlay.id = 'gp-overlay';
+        const ctxMenu = document.createElement('div'); ctxMenu.id = 'gp-context-menu';
+        
+        ctxMenu.innerHTML = \`<div class="gp-menu-item" id="ctx-open">\${ICONS.plus} 開啟選單</div><div class="gp-menu-item danger" id="ctx-close">\${ICONS.close} 關閉程式</div>\`;
+        
+        panel.innerHTML = \`
+            <div class="gp-resizer" id="gp-resizer"></div>
+            <div class="gp-header">
+                <div class="gp-title">GUTS填表小幫手 <span style="font-size:12px;opacity:0.6">V</span></div>
+                <div class="gp-controls">
+                    <div class="gp-btn-action" id="gp-add">\${ICONS.plus} 新增</div>
+                    <div class="gp-btn-action" id="gp-export">\${ICONS.export} 匯出</div>
+                    <div class="gp-btn-action" id="gp-min">\${ICONS.minus} 縮小</div>
+                    <div class="gp-btn-action" id="gp-close" style="color:#fca5a5;">\${ICONS.close} 關閉</div>
+                </div>
+            </div>
+            <div class="gp-body" id="gp-list"></div>
+        \`;
+        
+        const modal = document.createElement('div'); modal.id = 'gp-modal';
+        modal.innerHTML = \`
+            <div class="gp-modal-head">
+                <span class="gp-title" style="color:#333">編輯內容</span>
+                <button class="gp-icon-btn" id="gp-max-toggle" title="放大/縮小">\${ICONS.max}</button>
+            </div>
+            <div class="gp-modal-body">
+                <div><span class="gp-label">標題</span><input class="gp-input" id="edit-title" placeholder="輸入標題..."></div>
+                <div style="flex:1; display:flex; flex-direction:column;">
+                    <span class="gp-label">內容 (所見即所得)</span>
+                    <div class="gp-toolbar">
+                        <button class="gp-tool-btn" data-cmd="bold"><b>B</b></button>
+                        <button class="gp-tool-btn" data-cmd="italic"><i>I</i></button>
+                        <button class="gp-tool-btn" data-cmd="underline"><u>U</u></button>
+                        <div style="display:flex;align-items:center;gap:3px;font-size:12px;margin-right:5px;">A <input type="color" class="gp-color-picker" id="cmd-foreColor" value="#000000"></div>
+                        <div style="display:flex;align-items:center;gap:3px;font-size:12px;margin-right:5px;">Bg <input type="color" class="gp-color-picker" id="cmd-hiliteColor" value="#ffffff"></div>
+                        <button class="gp-tool-btn" data-cmd="removeFormat">清除</button>
+                    </div>
+                    <div id="edit-rich-content" class="gp-rich-editor" contenteditable="true"></div>
+                </div>
+                <div style="background:#f1f5f9; padding:10px; border-radius:6px; display:flex; align-items:center; gap:10px;">
+                    <label style="cursor:pointer; display:flex; align-items:center; font-weight:bold;">
+                        <input type="checkbox" id="edit-pinned" style="margin-right:5px; transform:scale(1.2);"> 置頂
+                    </label>
+                    <div class="gp-bg-picker-wrap">
+                        <span style="font-size:12px;font-weight:bold;">卡片背景:</span>
+                        <input type="color" id="edit-bg-color" class="gp-bg-picker" value="#ffffff">
+                    </div>
+                </div>
+            </div>
+            <div class="gp-modal-foot">
+                <button class="gp-btn gp-btn-default" id="edit-cancel">取消</button>
+                <button class="gp-btn gp-btn-primary" id="edit-save">儲存</button>
+            </div>
+        \`;
+
+        const previewBox = document.createElement('div'); previewBox.className = 'gp-preview'; previewBox.id = 'gp-preview-box';
+        
+        root.appendChild(overlay); root.appendChild(icon); root.appendChild(panel); root.appendChild(modal); root.appendChild(previewBox); root.appendChild(ctxMenu);
+        document.body.appendChild(root);
+
+        let currentEditIdx = -1;
+        const pnl = panel; const icn = icon;
+
+        const save = () => { localStorage.setItem(STORAGE_KEY, JSON.stringify(appData)); render(); };
+        const savePrefs = () => { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); };
+
+        const render = () => {
+            const list = document.getElementById('gp-list'); list.innerHTML = '';
+            const sorted = appData.map((d, i) => ({...d, _idx: i})).sort((a,b) => {
+                if (a.pinned && !b.pinned) return -1;
+                if (!a.pinned && b.pinned) return 1;
+                return 0; 
+            });
+            
+            sorted.forEach(item => {
+                const el = document.createElement('div'); el.className = \`gp-item \${item.pinned ? 'pinned' : ''}\`;
+                el.draggable = true;
+                el.style.backgroundColor = item.color || '#ffffff';
+                el.innerHTML = \`
+                    <div class="gp-item-left" id="btn-insert-\${item._idx}" title="填入內容"><div class="gp-fill-btn">\${ICONS.paste}<span class="gp-fill-text">填入</span></div></div>
+                    <div class="gp-item-mid" id="info-\${item._idx}"><div class="gp-item-title">\${item.pinned ? ICONS.pin : ''} \${item.title}</div></div>
+                    <div class="gp-item-right">
+                        <button class="gp-icon-btn edit" id="btn-edit-\${item._idx}" title="編輯">\${ICONS.edit}</button>
+                        <button class="gp-icon-btn delete" id="btn-del-\${item._idx}" title="刪除">\${ICONS.trash}</button>
+                        <div class="gp-drag-handle" title="拖曳排序">\${ICONS.grip}</div>
+                    </div>
+                \`;
+                el.querySelector(\`#btn-insert-\${item._idx}\`).onclick = async (e) => { e.stopPropagation(); await copyToClipboard(item); fillWorklog(item); };
+                el.querySelector(\`#btn-edit-\${item._idx}\`).onclick = (e) => { e.stopPropagation(); openEdit(item._idx); };
+                el.ondblclick = (e) => { e.stopPropagation(); openEdit(item._idx); };
+                el.querySelector(\`#btn-del-\${item._idx}\`).onclick = (e) => { 
+                    e.stopPropagation(); 
+                    if(confirm('確定要刪除嗎？')) {
+                        const realIdx = appData.findIndex((_, i) => i === item._idx);
+                        if(realIdx > -1) { appData.splice(realIdx, 1); save(); }
+                    }
+                };
+                el.ondragstart = (e) => { e.dataTransfer.setData('text/plain', item._idx); el.style.opacity = '0.5'; };
+                el.ondragover = (e) => { e.preventDefault(); };
+                el.ondragend = () => { el.style.opacity = '1'; };
+                el.ondrop = (e) => {
+                    e.stopPropagation();
+                    const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+                    if(fromIdx !== item._idx) {
+                        const element = appData[fromIdx]; appData.splice(fromIdx, 1); appData.splice(item._idx, 0, element); save();
+                    }
+                };
+                el.querySelector(\`#info-\${item._idx}\`).onmouseenter = () => {
+                    const pb = document.getElementById('gp-preview-box'); pb.innerHTML = item.html || item.content;
+                    pb.style.display = 'block'; const rect = el.getBoundingClientRect();
+                    pb.style.top = rect.top + 'px'; pb.style.right = (prefs.width + 10) + 'px';
+                };
+                el.querySelector(\`#info-\${item._idx}\`).onmouseleave = () => { document.getElementById('gp-preview-box').style.display = 'none'; };
+                list.appendChild(el);
+            });
+        };
+
+        const copyToClipboard = async (item) => {
+            try {
+                const blobHtml = new Blob([item.html || item.content], { type: 'text/html' });
+                const blobText = new Blob([item.content], { type: 'text/plain' });
+                await navigator.clipboard.write([new ClipboardItem({ 'text/html': blobHtml, 'text/plain': blobText })]);
+                showToast('已複製！');
+            } catch(e) {}
+        };
+
+        // --- OLD HELPER: KEEP FOR RICH TEXT INSERT ---
+        const normalizeHtmlForInsert = (rawHtml) => {
+            if (!rawHtml) return '';
+            const div = document.createElement('div');
+            div.innerHTML = rawHtml;
+            const blocks = div.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, ul, ol, li');
+            blocks.forEach(el => { el.style.margin = '0'; el.style.padding = '0'; el.style.lineHeight = '1.5'; });
+            const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false);
+            let node;
+            while(node = walker.nextNode()) { node.nodeValue = node.nodeValue.replace(/\t/g, ' '); }
+            return div.innerHTML;
+        };
+
+        const fillWorklog = (item) => {
+            let target = null;
+            const xpath = "//*[contains(text(), 'Update Worklog')]";
+            const result = document.evaluate(xpath, document.body, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+            for (let i = 0; i < result.snapshotLength; i++) {
+                const node = result.snapshotItem(i);
+                if(node.offsetParent === null) continue;
+                let container = node.parentElement; 
+                let candidate = findInputBelow(container);
+                if(candidate) { target = candidate; break; }
+                candidate = findInputBelow(container.parentElement);
+                if(candidate) { target = candidate; break; }
+            }
+            if (!target) target = document.querySelector('textarea[aria-label*="Worklog"], textarea[placeholder*="Worklog"]');
+            if (!target && document.activeElement && (document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable)) target = document.activeElement;
+
+            if (target) {
+                target.focus();
+                
+                if (target.isContentEditable) {
+                    // 1. Rich Text Field (HTML Insert)
+                    const compactHtml = normalizeHtmlForInsert(item.html || item.content);
+                    document.execCommand('insertHTML', false, compactHtml);
+                } else {
+                    // 2. Plain Text Field / Textarea (FIX)
+                    // Explicitly convert HTML structure to text with newlines
+                    const start = target.selectionStart || 0; const end = target.selectionEnd || 0;
+                    
+                    const temp = document.createElement('div');
+                    temp.innerHTML = item.html || item.content;
+                    
+                    // Replace <br> with newline literal
+                    temp.querySelectorAll('br').forEach(br => br.replaceWith('\\n'));
+                    
+                    // Append newline to block elements to enforce line breaks
+                    temp.querySelectorAll('div, p, li, h1, h2, h3, tr').forEach(el => {
+                        el.appendChild(document.createTextNode('\\n'));
+                    });
+                    
+                    let cleanVal = temp.textContent;
+                    
+                    target.value = target.value.substring(0, start) + cleanVal + target.value.substring(end);
+                    target.dispatchEvent(new Event('input', {bubbles: true}));
+                }
+                showToast('已插入！');
+            } else { showToast('已複製 (未找到欄位)'); }
+        };
+
+        const findInputBelow = (root) => {
+            if(!root) return null;
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+            while(walker.nextNode()) {
+                const el = walker.currentNode;
+                if((el.tagName === 'TEXTAREA' || el.isContentEditable) && el.offsetParent !== null) return el;
+            }
+            let next = root.nextElementSibling;
+            while(next) {
+                if((next.tagName === 'TEXTAREA' || next.isContentEditable) && next.offsetParent !== null) return next;
+                const inner = next.querySelector('textarea, [contenteditable="true"]');
+                if(inner && inner.offsetParent !== null) return inner;
+                next = next.nextElementSibling;
+            }
+            return null;
+        }
+
+        const showToast = (msg) => {
+            const t = document.getElementById('gp-toast'); t.innerText = msg; t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2000);
+        };
+
+        const openEdit = (idx) => {
+            currentEditIdx = idx;
+            const item = (idx === -1) ? { title: '', html: '', pinned: false, color: '#ffffff' } : appData[idx];
+            document.getElementById('edit-title').value = item.title;
+            document.getElementById('edit-rich-content').innerHTML = item.html || item.content || '';
+            document.getElementById('edit-pinned').checked = item.pinned;
+            document.getElementById('edit-bg-color').value = item.color || '#ffffff';
+            document.getElementById('gp-overlay').style.display = 'block';
+            document.getElementById('gp-modal').style.display = 'flex';
+        };
+        
+        document.querySelectorAll('.gp-tool-btn').forEach(btn => {
+            btn.onmousedown = (e) => { e.preventDefault(); document.execCommand(btn.dataset.cmd, false, btn.dataset.val||null); };
+        });
+
+        // --- COLOR FIX: RESTORE SELECTION BEFORE APPLYING COLOR ---
+        const editor = document.getElementById('edit-rich-content');
+        let savedRange = null;
+
+        const saveSelection = () => {
+            const sel = window.getSelection();
+            if (sel.rangeCount > 0) {
+                const range = sel.getRangeAt(0);
+                if (editor.contains(range.commonAncestorContainer)) {
+                    savedRange = range;
+                }
+            }
+        };
+
+        editor.addEventListener('keyup', saveSelection);
+        editor.addEventListener('mouseup', saveSelection);
+        editor.addEventListener('input', saveSelection);
+
+        const applyColor = (cmd, val) => {
+            editor.focus();
+            if (savedRange) {
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(savedRange);
+            }
+            document.execCommand(cmd, false, val);
+            saveSelection();
+        };
+
+        document.getElementById('cmd-foreColor').onchange = (e) => applyColor('foreColor', e.target.value);
+        document.getElementById('cmd-hiliteColor').onchange = (e) => applyColor('hiliteColor', e.target.value);
+        
+        document.getElementById('gp-max-toggle').onclick = () => { const m = document.getElementById('gp-modal'); const btn = document.getElementById('gp-max-toggle'); m.classList.toggle('expanded'); btn.innerHTML = m.classList.contains('expanded') ? ICONS.min : ICONS.max; };
+
+        document.getElementById('edit-save').onclick = () => {
+            const title = document.getElementById('edit-title').value;
+            const html = document.getElementById('edit-rich-content').innerHTML;
+            const plain = document.getElementById('edit-rich-content').innerText;
+            const color = document.getElementById('edit-bg-color').value;
+            const pinned = document.getElementById('edit-pinned').checked;
+            const newItem = { title: title||'未命名', content: plain, html: html, pinned: pinned, color: color };
+            if(currentEditIdx === -1) appData.push(newItem); else appData[currentEditIdx] = newItem;
+            save(); closeEdit();
+        };
+        
+        const closeEdit = () => { document.getElementById('gp-overlay').style.display = 'none'; document.getElementById('gp-modal').style.display = 'none'; };
+        document.getElementById('edit-cancel').onclick = closeEdit;
+        document.getElementById('gp-add').onclick = () => openEdit(-1);
+        
+        document.getElementById('gp-min').onclick = () => { pnl.style.display='none'; icn.style.display='flex'; prefs.isExpanded=false; savePrefs(); };
+        const openPanel = () => { icn.style.display='none'; pnl.style.display='flex'; prefs.isExpanded=true; savePrefs(); };
+        icn.onclick = openPanel;
+        document.getElementById('gp-close').onclick = () => root.remove();
+        if(prefs.isExpanded) { icn.style.display='none'; pnl.style.display='flex'; } else { icn.style.display='flex'; pnl.style.display='none'; }
+
+        icn.oncontextmenu = (e) => { e.preventDefault(); ctxMenu.style.display='block'; ctxMenu.style.top=e.clientY+'px'; ctxMenu.style.left=(e.clientX+10)+'px'; };
+        document.addEventListener('click', (e) => { if (!e.target.closest('#gp-context-menu')) ctxMenu.style.display='none'; });
+        document.getElementById('ctx-open').onclick = () => { ctxMenu.style.display='none'; openPanel(); };
+        document.getElementById('ctx-close').onclick = () => { ctxMenu.style.display='none'; root.remove(); };
+
+        let isDrag = false;
+        icn.onmousedown = (e) => {
+            if(e.button===2)return; e.preventDefault(); const sX=e.clientX-icn.getBoundingClientRect().left, sY=e.clientY-icn.getBoundingClientRect().top;
+            const move = (pX,pY) => { icn.style.left=(pX-sX)+'px'; icn.style.top=(pY-sY)+'px'; icn.style.right='auto'; };
+            const onMM = (ev) => { isDrag=true; move(ev.clientX, ev.clientY); };
+            const onMU = () => { document.removeEventListener('mousemove',onMM); document.removeEventListener('mouseup',onMU); if(isDrag){prefs.iconLeft=parseInt(icn.style.left); prefs.iconTop=parseInt(icn.style.top); savePrefs();} setTimeout(()=>isDrag=false,50); };
+            document.addEventListener('mousemove',onMM); document.addEventListener('mouseup',onMU);
+        };
+        icn.addEventListener('click', (e) => { if(isDrag) e.stopImmediatePropagation(); }, true);
+        const resizer = document.getElementById('gp-resizer');
+        resizer.onmousedown = (e) => {
+            e.preventDefault(); const sX=e.clientX, sW=parseInt(window.getComputedStyle(pnl).width);
+            const onMM = (ev) => { const nW=sW+(sX-ev.clientX); if(nW>300 && nW<800) pnl.style.width=nW+'px'; };
+            const onMU = () => { prefs.width=parseInt(pnl.style.width); savePrefs(); document.removeEventListener('mousemove',onMM); document.removeEventListener('mouseup',onMU); };
+            document.addEventListener('mousemove',onMM); document.addEventListener('mouseup',onMU);
+        };
+
+        /* EXPORT AS WEBPAGE (V5.5 Order + Font Style Fix) */
+        document.getElementById('gp-export').onclick = () => {
+            const sortedExport = appData.map((d, i) => ({...d, _idx: i}))
+                .sort((a,b) => {
+                    if (a.pinned && !b.pinned) return -1;
+                    if (!a.pinned && b.pinned) return 1;
+                    return 0; 
+                });
+
+            let htmlBody = \`<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<title>GUTS Pro 備份資料</title>
+<style>
+    body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0fdf4; }
+    .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    h1 { color: #166534; text-align: center; font-size: 24px; margin-bottom: 20px; }
+    .btn { display: block; width: 100%; padding: 15px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin-bottom: 20px; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
+    
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+    th, td { border: 1px solid #cbd5e1; padding: 12px; text-align: left; vertical-align: top; }
+    th { background: #f1f5f9; color: #475569; font-weight: bold; font-size: 11pt; } 
+    
+    td { 
+        font-size: 10pt;
+        line-height: 1; /* Export spacing set to 1 */ 
+        white-space: pre-wrap; 
+        word-wrap: break-word; 
+        word-break: break-all;
+        max-width: 0;
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>GUTS 小幫手 資料備份</h1>
+    <button class="btn" onclick="copyAll()">📋 點此複製全部 (Copy All)</button>
+    <div id="status" style="text-align:center; margin-bottom:10px; color:#166534; font-weight:bold; height:20px;"></div>
+    <table id="dataTable">
+        <thead>
+            <tr>
+                <th style="width: 25%">標題 (Title)</th>
+                <th>內容 (Content)</th>
+            </tr>
+        </thead>
+        <tbody>\`;
+
+            sortedExport.forEach(r => {
+               let bgStyle = r.color ? \`background-color:\${r.color};\` : '';
+               let contentHtml = r.html || r.content || '';
+               htmlBody += \`<tr><td style="\${bgStyle}">\${r.title}</td><td style="\${bgStyle}">\${contentHtml}</td></tr>\`;
+            });
+            
+            htmlBody += \`        </tbody>
+    </table>
+</div>
+<script>
+    function copyAll() {
+        const table = document.getElementById('dataTable');
+        const range = document.createRange();
+        range.selectNode(table);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        try {
+            document.execCommand('copy');
+            document.getElementById('status').innerText = '✅ 已複製！請回到 GUTS 產生器貼上還原。';
+            setTimeout(() => document.getElementById('status').innerText = '', 3000);
+        } catch (err) {
+            alert('複製失敗，請手動選取複製');
+        }
+    }
+<\/script>
+</body>
+</html>\`;
+            
+            const blob = new Blob([htmlBody], { type: 'text/html' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "GUTS_Backup.html";
+            link.click();
+        };
+
+        render();
+    } catch(err) {
+        alert('GUTS Pro 啟動失敗: ' + err.message);
+    }
+})();
+            `;
+
+            const cleanCode = code.trim();
+            const href = "javascript:" + encodeURIComponent(cleanCode);
+            bookmarkletBtn.href = href;
+        }
+    </script>
+</body>
+</html>
